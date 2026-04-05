@@ -32,7 +32,11 @@ const EMAIL_BODY_RU = `Уважаемые сотрудники!
 
 Готов оплатить услуги поиска и изготовления копии (копий) в соответствии с вашим прейскурантом. Просьба сообщить стоимость и сроки.
 
-С уважением,`;
+С уважением,
+
+Origin by Genisent
+от имени Nicholas Dickey
+nicholas.dickey@findexar.com`;
 
 /** English-only body (translation of the Russian draft above). */
 const EMAIL_BODY_EN = `Dear Sir or Madam,
@@ -41,7 +45,11 @@ Please search for a civil birth register (metric) record for **Vasiliy Nikolayev
 
 I agree to pay for research and copy services according to your current fee schedule. Please let me know the cost and the expected timeframe.
 
-Sincerely,`;
+Sincerely,
+
+Origin by Genisent
+on behalf of Nicholas Dickey
+nicholas.dickey@findexar.com`;
 
 function renderBoldSegments(text: string) {
   return text.split("**").map((chunk, i) =>
