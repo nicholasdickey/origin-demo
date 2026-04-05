@@ -34,7 +34,7 @@ pnpm build
 pnpm serve:mcp-app
 ```
 
-POST JSON-RPC to `http://localhost:3001/mcp` (no API key locally).
+Smoke test: `curl -sS http://localhost:3001/mcp` (GET returns JSON). POST JSON-RPC to the same URL for MCP (no API key locally).
 
 ## Vercel
 

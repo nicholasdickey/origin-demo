@@ -19,6 +19,15 @@ app.get("/debug/familysearch-iframe", async (_req, res) => {
   }
 });
 
+/** Smoke test / health: `curl -sS http://localhost:3001/mcp` */
+app.get("/mcp", (_req, res) => {
+  res.json({
+    ok: true,
+    service: "Origin By Genisent MCP",
+    hint: "POST JSON-RPC to this URL for the MCP protocol.",
+  });
+});
+
 app.post("/mcp", async (req, res) => {
   const server = createMcpAppsServer();
   const transport = new StreamableHTTPServerTransport({
@@ -39,6 +48,7 @@ app.listen(PORT, (err?: Error) => {
     process.exit(1);
   }
   console.log(`Origin MCP App server listening on http://localhost:${PORT}/mcp`);
+  console.log(`  Smoke test: GET http://localhost:${PORT}/mcp`);
   console.log(
     `  FamilySearch iframe debug: GET http://localhost:${PORT}/debug/familysearch-iframe`,
   );
