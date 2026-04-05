@@ -5,7 +5,12 @@ import {
   SET_GLOBALS_EVENT_TYPE,
   type SetGlobalsEvent,
 } from "../types.js";
-import type { OriginView, ResolvedOriginView } from "./originViews.js";
+import {
+  type OriginView,
+  type ResolvedOriginView,
+  parseViewFromHostPayload,
+  parseViewFromToolInput,
+} from "./originViews.js";
 import { MockFamilySearchLogin } from "./MockFamilySearchLogin.js";
 import { OriginHeader } from "./OriginHeader.js";
 
@@ -75,13 +80,19 @@ function EmailHeaderRows(props: {
 }
 
 function useResolvedView(): ResolvedOriginView {
-  const toolResponseMetadata = useOpenAiGlobal("toolResponseMetadata") as {
-    view?: string;
-  } | null;
-  const toolOutput = useOpenAiGlobal("toolOutput") as { view?: string } | null;
+  const toolResponseMetadata = useOpenAiGlobal("toolResponseMetadata");
+  const toolOutput = useOpenAiGlobal("toolOutput");
+  const toolInput = useOpenAiGlobal("toolInput");
 
+  // Order: structured output (incl. _meta.view) first; then tool name from
+  // toolInput (often set early); then toolResponseMetadata (can stay stale for
+  // many seconds). Matches ChatVault leaning on toolOutput + avoids long wrong
+  // screen when only metadata was updated from a previous tool.
   const fromHost =
-    toolResponseMetadata?.view ?? toolOutput?.view ?? undefined;
+    parseViewFromHostPayload(toolOutput) ??
+    parseViewFromToolInput(toolInput) ??
+    parseViewFromHostPayload(toolResponseMetadata) ??
+    undefined;
   if (fromHost === "familyLogin" || fromHost === "emailApproval") {
     return fromHost;
   }
