@@ -29,20 +29,15 @@ app.get("/mcp", (_req, res) => {
 });
 
 app.post("/mcp", async (req, res) => {
-  console.log("[MCP server.ts POST]", {
-    accept: req.headers.accept,
-    "content-type": req.headers["content-type"],
-    bodyType: typeof req.body,
-  });
   const server = createMcpAppsServer();
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
+    enableJsonResponse: true,
   });
 
   res.on("close", () => transport.close());
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
-  console.log("[MCP server.ts POST done]", { headersSent: res.headersSent });
 });
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;

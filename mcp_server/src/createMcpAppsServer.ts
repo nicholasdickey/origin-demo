@@ -13,18 +13,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 
-export function getWidgetDomain(): string {
-  if (process.env.WIDGET_DOMAIN) {
-    return process.env.WIDGET_DOMAIN.replace(/\/$/, "");
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
-  }
-  return "http://localhost:3001";
-}
-
 /**
- * MCP Apps server: two mock tools + single widget HTML resource.
+ * Create and configure the MCP Apps server for Origin By Genisent demo.
+ *
+ * This server:
+ * - Exposes showMockFamilySearchLogin and showMockEmailApproval tools
+ * - Registers the MCP App UI resource at ui://origin-by-genisent/mcp-app.html
  */
 export function createMcpAppsServer(): McpServer {
   const server = new McpServer({
@@ -33,7 +27,6 @@ export function createMcpAppsServer(): McpServer {
   });
 
   const resourceUri = "ui://origin-by-genisent/mcp-app.html";
-  const widgetDomain = getWidgetDomain();
 
   const toolInputSchema = {
     note: z.string().optional(),
@@ -53,8 +46,10 @@ export function createMcpAppsServer(): McpServer {
         },
       },
     },
-    async () => {
-      console.log("[MCP] showMockFamilySearchLogin");
+    async (args) => {
+      console.log("[MCP] showMockFamilySearchLogin handler called", {
+        argsKeys: args ? Object.keys(args) : [],
+      });
       return {
         content: [
           {
@@ -85,8 +80,10 @@ export function createMcpAppsServer(): McpServer {
         },
       },
     },
-    async () => {
-      console.log("[MCP] showMockEmailApproval");
+    async (args) => {
+      console.log("[MCP] showMockEmailApproval handler called", {
+        argsKeys: args ? Object.keys(args) : [],
+      });
       return {
         content: [
           {
@@ -102,11 +99,6 @@ export function createMcpAppsServer(): McpServer {
       };
     },
   );
-
-  const widgetCSP = {
-    connect_domains: [widgetDomain],
-    resource_domains: [widgetDomain],
-  };
 
   registerAppResource(
     server as unknown as Parameters<typeof registerAppResource>[0],
@@ -137,6 +129,17 @@ export function createMcpAppsServer(): McpServer {
           `Failed to find mcp-app.html. Tried: ${possiblePaths.join(", ")}. Last error: ${lastError?.message}`,
         );
       }
+
+      const widgetDomain = process.env.WIDGET_DOMAIN
+        ? process.env.WIDGET_DOMAIN.replace(/\/$/, "")
+        : process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`
+          : "http://localhost:3001";
+
+      const widgetCSP = {
+        connect_domains: [widgetDomain],
+        resource_domains: [widgetDomain],
+      };
 
       return {
         contents: [

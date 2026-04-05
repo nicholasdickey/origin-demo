@@ -51,61 +51,24 @@ async function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function logMcp(stage: string, detail: Record<string, unknown>) {
-  console.log(
-    `[MCP api/mcp] ${stage}`,
-    JSON.stringify({ ...detail, t: new Date().toISOString() }),
-  );
-}
-
 export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
 ) {
-  const url = req.url ?? "";
-  const hasAuth = Boolean(req.headers.authorization);
-  const authScheme = req.headers.authorization?.split(/\s+/, 1)[0] ?? "";
-  logMcp("request", {
-    method: req.method,
-    url,
-    hasAuth,
-    authScheme: hasAuth ? authScheme : undefined,
-    accept: req.headers.accept,
-    "content-type": req.headers["content-type"],
-    "mcp-session-id": req.headers["mcp-session-id"],
-    "mcp-protocol-version": req.headers["mcp-protocol-version"],
-  });
-
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "content-type, mcp-session-id, authorization",
   );
 
   if (req.method === "OPTIONS") {
-    logMcp("OPTIONS", { status: 204 });
     res.writeHead(204);
     res.end();
     return;
   }
 
-  if (req.method === "GET") {
-    logMcp("GET smoke", { contentType: "application/json" });
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.writeHead(200);
-    res.end(
-      JSON.stringify({
-        ok: true,
-        service: "Origin By Genisent MCP",
-        hint: "POST JSON-RPC to this URL for the MCP protocol (Authorization: Bearer required).",
-      }),
-    );
-    return;
-  }
-
   if (req.method !== "POST") {
-    logMcp("method_not_allowed", { method: req.method });
     res.writeHead(404);
     res.end("Not Found");
     return;
@@ -113,33 +76,21 @@ export default async function handler(
 
   const auth = isAuthorized(req);
   if (auth.ok === false) {
-    logMcp("auth_failed", {
-      status: auth.status,
-      reason: auth.message,
-      apiKeyConfigured: Boolean(process.env.API_KEY),
-    });
     res.setHeader("WWW-Authenticate", "Bearer");
     res.writeHead(auth.status);
     res.end(JSON.stringify({ error: auth.message }));
     return;
   }
 
-  logMcp("auth_ok", {});
-
   try {
     const server = createMcpAppsServer();
-    // ChatGPT / MCP Streamable HTTP clients expect SSE (Content-Type: text/event-stream).
-    // enableJsonResponse: true breaks connectors that validate the response header.
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
+      enableJsonResponse: true,
     });
 
-    res.on("close", () => {
-      logMcp("res_close", {});
-      transport.close();
-    });
+    res.on("close", () => transport.close());
     await server.connect(transport);
-    logMcp("server_connected", {});
 
     const requestBodyStr = await readRequestBody(req);
     let requestBody: unknown = undefined;
@@ -151,24 +102,11 @@ export default async function handler(
       }
     }
 
-    const preview =
-      requestBodyStr.length > 500
-        ? `${requestBodyStr.slice(0, 500)}…`
-        : requestBodyStr;
-    logMcp("handleRequest_start", {
-      bodyBytes: Buffer.byteLength(requestBodyStr, "utf8"),
-      bodyPreview: preview,
-    });
-
     await transport.handleRequest(req, res, requestBody);
-
-    logMcp("handleRequest_done", { headersSent: res.headersSent });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown internal error";
-    const stack = error instanceof Error ? error.stack : undefined;
-    console.error("[MCP] Internal error in api/mcp handler:", message, stack);
-    logMcp("catch", { message, stack });
+    console.error("[MCP] Internal error in api/mcp handler:", message);
     if (!res.headersSent) {
       res.writeHead(500);
     }
