@@ -56,7 +56,7 @@ export default async function handler(
   res: ServerResponse,
 ) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "content-type, mcp-session-id, authorization",
@@ -65,6 +65,20 @@ export default async function handler(
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  /** Public smoke / health (browser or curl). MCP JSON-RPC is POST only. */
+  if (req.method === "GET") {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        ok: true,
+        service: "Origin By Genisent MCP",
+        hint: "POST JSON-RPC to this URL for the MCP protocol (Authorization: Bearer required on Vercel).",
+      }),
+    );
     return;
   }
 

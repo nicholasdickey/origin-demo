@@ -40,7 +40,7 @@ Smoke test: `curl -sS http://localhost:3001/mcp` (GET returns JSON). POST JSON-R
 
 - Set **API_KEY** and optionally **WIDGET_DOMAIN** (or rely on **VERCEL_URL**).
 - Build command should run `pnpm build` / `vercel-build` so `assets/mcp-app.html` exists for the serverless function (`includeFiles`: `assets/**`).
-- The serverless handler matches ChatVault: **POST only**, Streamable HTTP with **`enableJsonResponse`** (JSON bodies, not SSE). For a quick **GET** smoke response, use the local dev server (`pnpm serve:mcp-app` → `curl` GET `/mcp`).
+- Streamable HTTP uses **`enableJsonResponse`** (JSON bodies, not SSE) for **POST**. **GET** `/mcp` returns a small JSON smoke payload (no auth) on Vercel and locally.
 
 ## Git remote
 
