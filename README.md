@@ -34,13 +34,15 @@ pnpm build
 pnpm serve:mcp-app
 ```
 
-Smoke test: `curl -sS http://localhost:3001/mcp` (GET returns JSON). POST JSON-RPC to the same URL for MCP (no API key locally).
+Smoke test: `curl -sS http://localhost:3001/mcp` (GET returns JSON). POST JSON-RPC to the same URL for MCP. **`API_KEY`** is optional: if unset, no Bearer required (same as open ChatGPT connectors). If set, send `Authorization: Bearer <API_KEY>`.
 
 ## Vercel
 
-- Set **API_KEY** and optionally **WIDGET_DOMAIN** (or rely on **VERCEL_URL**).
+- **`API_KEY`** (optional): omit for public/no-auth MCP; set to require Bearer on `POST /mcp`.
+- **`WIDGET_DOMAIN`** (optional): or rely on **`VERCEL_URL`** for widget metadata.
 - Build command should run `pnpm build` / `vercel-build` so `assets/mcp-app.html` exists for the serverless function (`includeFiles`: `assets/**`).
-- Streamable HTTP uses **`enableJsonResponse`** (JSON bodies, not SSE) for **POST**. **GET** `/mcp` returns a small JSON smoke payload (no auth) on Vercel and locally.
+- Streamable HTTP uses **`enableJsonResponse`** (JSON-RPC / JSON bodies, not SSE), matching ChatVault-style MCP servers. **GET** `/mcp` returns a small JSON smoke payload (no auth).
+- If a ChatGPT build still complains about **`text/event-stream`** vs **`application/json`**, that is a connector mismatch with JSON Streamable HTTP—not a reason to drop JSON-RPC here; other JSON-RPC MCP apps (e.g. ChatVault) use the same pattern.
 
 ## Git remote
 

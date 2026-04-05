@@ -1,43 +1,31 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
+import { authorizeMcpRequest } from "../mcpAuth.js";
 import { createMcpAppsServer } from "../mcp_server/src/createMcpAppsServer.js";
 
-function getBearerTokenFromAuthHeader(
-  header: string | string[] | undefined,
-): string | null {
-  const raw = Array.isArray(header) ? header[0] : header;
-  if (!raw) return null;
-  const match = raw.match(/^\s*Bearer\s+(.+)\s*$/i);
-  return match?.[1] ?? null;
+const LOG = "[MCP /api/mcp]";
+
+function logLine(
+  event: string,
+  detail: Record<string, unknown> = {},
+): void {
+  console.log(
+    LOG,
+    event,
+    JSON.stringify({ ...detail, t: new Date().toISOString() }),
+  );
 }
 
-function isAuthorized(
-  req: IncomingMessage,
-): { ok: true } | { ok: false; status: number; message: string } {
-  const expected = process.env.API_KEY;
-  if (!expected) {
-    return {
-      ok: false,
-      status: 500,
-      message: "Server misconfigured: missing API_KEY env var",
-    };
-  }
-  const token = getBearerTokenFromAuthHeader(req.headers.authorization);
-  if (!token) {
-    return {
-      ok: false,
-      status: 401,
-      message: "Missing Authorization: Bearer <API_KEY>",
-    };
-  }
-  const a = Buffer.from(token);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    return { ok: false, status: 401, message: "Invalid API key" };
-  }
-  return { ok: true };
+function sanitizeHeadersForLog(req: IncomingMessage): Record<string, unknown> {
+  const h = req.headers;
+  return {
+    accept: h.accept,
+    "content-type": h["content-type"],
+    "mcp-session-id": h["mcp-session-id"],
+    "mcp-protocol-version": h["mcp-protocol-version"],
+    authorization: h.authorization ? "present" : "absent",
+  };
 }
 
 async function readRequestBody(req: IncomingMessage): Promise<string> {
@@ -55,6 +43,8 @@ export default async function handler(
   req: IncomingMessage,
   res: ServerResponse,
 ) {
+  const url = req.url ?? "";
+
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader(
@@ -63,6 +53,7 @@ export default async function handler(
   );
 
   if (req.method === "OPTIONS") {
+    logLine("OPTIONS", { status: 204 });
     res.writeHead(204);
     res.end();
     return;
@@ -70,31 +61,44 @@ export default async function handler(
 
   /** Public smoke / health (browser or curl). MCP JSON-RPC is POST only. */
   if (req.method === "GET") {
+    logLine("GET_smoke", { url });
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.writeHead(200);
     res.end(
       JSON.stringify({
         ok: true,
         service: "Origin By Genisent MCP",
-        hint: "POST JSON-RPC to this URL for the MCP protocol (Authorization: Bearer required on Vercel).",
+        hint:
+          "POST JSON-RPC to this URL for the MCP protocol. Set API_KEY on the server to require Bearer auth.",
       }),
     );
     return;
   }
 
   if (req.method !== "POST") {
+    logLine("not_found", { method: req.method, url });
     res.writeHead(404);
     res.end("Not Found");
     return;
   }
 
-  const auth = isAuthorized(req);
+  logLine("POST_entry", {
+    url,
+    headers: sanitizeHeadersForLog(req),
+  });
+
+  const auth = authorizeMcpRequest(req.headers);
   if (auth.ok === false) {
+    logLine("auth_failed", {
+      status: auth.status,
+      reason: auth.message,
+    });
     res.setHeader("WWW-Authenticate", "Bearer");
     res.writeHead(auth.status);
     res.end(JSON.stringify({ error: auth.message }));
     return;
   }
+  logLine("auth_ok", { mode: auth.mode });
 
   try {
     const server = createMcpAppsServer();
@@ -103,8 +107,12 @@ export default async function handler(
       enableJsonResponse: true,
     });
 
-    res.on("close", () => transport.close());
+    res.on("close", () => {
+      logLine("res_close", {});
+      transport.close();
+    });
     await server.connect(transport);
+    logLine("server_connected", {});
 
     const requestBodyStr = await readRequestBody(req);
     let requestBody: unknown = undefined;
@@ -116,11 +124,24 @@ export default async function handler(
       }
     }
 
+    const preview =
+      requestBodyStr.length > 500
+        ? `${requestBodyStr.slice(0, 500)}…`
+        : requestBodyStr;
+    logLine("handleRequest_start", {
+      bodyBytes: Buffer.byteLength(requestBodyStr, "utf8"),
+      bodyPreview: preview,
+    });
+
     await transport.handleRequest(req, res, requestBody);
+
+    logLine("handleRequest_done", { headersSent: res.headersSent });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown internal error";
-    console.error("[MCP] Internal error in api/mcp handler:", message);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error(LOG, "Internal error:", message, stack);
+    logLine("catch", { message, stack });
     if (!res.headersSent) {
       res.writeHead(500);
     }

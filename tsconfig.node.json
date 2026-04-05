@@ -18,6 +18,7 @@
   "include": [
     "*.mts",
     "server.ts",
+    "mcpAuth.ts",
     "familysearchProbe.ts",
     "api/**/*.ts",
     "mcp_server/**/*.ts"
