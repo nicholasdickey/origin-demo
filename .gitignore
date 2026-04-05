@@ -1,0 +1,9 @@
+node_modules/
+dist/
+assets/mcp-app.html
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+node_modules/.tmp/
