@@ -5,7 +5,7 @@ import {
   SET_GLOBALS_EVENT_TYPE,
   type SetGlobalsEvent,
 } from "../types.js";
-import type { OriginView } from "./originViews.js";
+import type { OriginView, ResolvedOriginView } from "./originViews.js";
 import { MockFamilySearchLogin } from "./MockFamilySearchLogin.js";
 import { OriginHeader } from "./OriginHeader.js";
 
@@ -74,7 +74,7 @@ function EmailHeaderRows(props: {
   );
 }
 
-function useResolvedView(): OriginView {
+function useResolvedView(): ResolvedOriginView {
   const toolResponseMetadata = useOpenAiGlobal("toolResponseMetadata") as {
     view?: string;
   } | null;
@@ -86,12 +86,14 @@ function useResolvedView(): OriginView {
     return fromHost;
   }
 
-  if (import.meta.env.DEV && typeof window !== "undefined") {
+  if (typeof window !== "undefined") {
     const q = new URLSearchParams(window.location.search).get("view");
     if (q === "familyLogin" || q === "emailApproval") return q;
   }
 
-  return "familyLogin";
+  // Do not default to familyLogin: the host often applies tool metadata one tick
+  // after first paint; defaulting caused a flash of the wrong screen (e.g. email tool).
+  return "pending";
 }
 
 function setDevViewLocal(view: OriginView) {
@@ -104,7 +106,7 @@ function setDevViewLocal(view: OriginView) {
   );
 }
 
-function DevViewBar({ view }: { view: OriginView }) {
+function DevViewBar({ view }: { view: ResolvedOriginView }) {
   if (!import.meta.env.DEV) return null;
   return (
     <div className="flex flex-wrap gap-2 border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-slate-600/80 dark:bg-slate-800/70 dark:text-slate-200">
@@ -369,7 +371,25 @@ export function OriginApp() {
       <DevViewBar view={view} />
 
       <main className="mx-auto max-w-3xl px-4 py-6">
-        {view === "familyLogin" ? (
+        {view === "pending" ? (
+          <div
+            className="flex min-h-[280px] flex-col items-center justify-center gap-3 rounded-lg border border-stone-200 bg-white/80 px-6 py-12 text-center text-stone-600 shadow-sm dark:border-slate-600/80 dark:bg-slate-900/60 dark:text-slate-300"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent dark:border-teal-400 dark:border-t-transparent"
+              aria-hidden
+            />
+            <p className="text-sm font-medium text-stone-700 dark:text-slate-200">
+              Loading widget…
+            </p>
+            <p className="max-w-sm text-xs text-stone-500 dark:text-slate-400">
+              Waiting for the chat to attach this tool’s view. If this stays here,
+              try running the tool again from the conversation.
+            </p>
+          </div>
+        ) : view === "familyLogin" ? (
           <FamilyLoginPanel />
         ) : (
           <>
