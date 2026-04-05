@@ -2,10 +2,22 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import cors from "cors";
 import express from "express";
 import { createMcpAppsServer } from "./mcp_server/src/createMcpAppsServer.js";
+import { probeFamilySearchIframeHeaders } from "./familysearchProbe.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+/** Probe FamilySearch response headers (why third-party iframes are blocked). */
+app.get("/debug/familysearch-iframe", async (_req, res) => {
+  try {
+    const json = await probeFamilySearchIframeHeaders();
+    res.json(json);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    res.status(500).json({ error: message });
+  }
+});
 
 app.post("/mcp", async (req, res) => {
   const server = createMcpAppsServer();
@@ -27,4 +39,7 @@ app.listen(PORT, (err?: Error) => {
     process.exit(1);
   }
   console.log(`Origin MCP App server listening on http://localhost:${PORT}/mcp`);
+  console.log(
+    `  FamilySearch iframe debug: GET http://localhost:${PORT}/debug/familysearch-iframe`,
+  );
 });

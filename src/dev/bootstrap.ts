@@ -1,5 +1,10 @@
 import type { OriginView } from "../origin/originViews.js";
-import { SET_GLOBALS_EVENT_TYPE, SetGlobalsEvent, type OpenAiGlobals } from "../types.js";
+import type { OriginWidgetState } from "../origin/originWidgetState.js";
+import {
+  SET_GLOBALS_EVENT_TYPE,
+  SetGlobalsEvent,
+  type OpenAiGlobals,
+} from "../types.js";
 
 function parseViewFromUrl(): OriginView {
   const params = new URLSearchParams(window.location.search);
@@ -8,7 +13,28 @@ function parseViewFromUrl(): OriginView {
   return "familyLogin";
 }
 
-function createDevOpenAi(initialView: OriginView): OpenAiGlobals & {
+function parseThemeFromUrl(): "light" | "dark" {
+  const t = new URLSearchParams(window.location.search).get("theme");
+  if (t === "dark") return "dark";
+  return "light";
+}
+
+/** Dev-only: `?anon=1` → anonymous; `?user=Name` → logged in as Name (default: Demo User). */
+function parseWidgetAuthFromUrl(): OriginWidgetState {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("anon") === "1") {
+    return { isAnonymous: true };
+  }
+  const u = params.get("user") ?? params.get("userName");
+  if (u) return { userName: u, isAnonymous: false };
+  return { userName: "Demo User", isAnonymous: false };
+}
+
+function createDevOpenAi(
+  initialView: OriginView,
+  theme: "light" | "dark",
+  widgetState: OriginWidgetState,
+): OpenAiGlobals & {
   sendFollowUpMessage: (args: { prompt: string }) => Promise<void>;
   openExternal: (payload: { href: string }) => void;
   callTool: (
@@ -20,7 +46,7 @@ function createDevOpenAi(initialView: OriginView): OpenAiGlobals & {
   }) => Promise<{ mode: "inline" | "fullscreen" | "pip" }>;
 } {
   const base: OpenAiGlobals = {
-    theme: "light",
+    theme,
     locale: "en",
     userAgent: {
       device: { type: "desktop" },
@@ -32,7 +58,7 @@ function createDevOpenAi(initialView: OriginView): OpenAiGlobals & {
     toolInput: {},
     toolOutput: null,
     toolResponseMetadata: { view: initialView },
-    widgetState: null,
+    widgetState,
     setWidgetState: async (state) => {
       if (window.openai) {
         window.openai.widgetState = state;
@@ -48,7 +74,17 @@ function createDevOpenAi(initialView: OriginView): OpenAiGlobals & {
   return {
     ...base,
     callTool: async () => ({ result: "" }),
-    requestDisplayMode: async ({ mode }) => ({ mode }),
+    requestDisplayMode: async ({ mode }) => {
+      if (window.openai) {
+        window.openai.displayMode = mode;
+      }
+      window.dispatchEvent(
+        new CustomEvent(SET_GLOBALS_EVENT_TYPE, {
+          detail: { globals: { displayMode: mode } },
+        }) as SetGlobalsEvent,
+      );
+      return { mode };
+    },
     openExternal: ({ href }) => {
       window.open(href, "_blank", "noopener,noreferrer");
     },
@@ -61,13 +97,16 @@ function createDevOpenAi(initialView: OriginView): OpenAiGlobals & {
 /** Install mock `window.openai` and globals for Vite dev (no MCP host). */
 export function installDevBootstrap(): void {
   const view = parseViewFromUrl();
-  window.openai = createDevOpenAi(view);
+  const theme = parseThemeFromUrl();
+  const widgetState = parseWidgetAuthFromUrl();
+  window.openai = createDevOpenAi(view, theme, widgetState);
   window.dispatchEvent(
     new CustomEvent(SET_GLOBALS_EVENT_TYPE, {
       detail: {
         globals: {
-          theme: "light",
+          theme,
           toolResponseMetadata: { view },
+          widgetState,
           maxHeight: 720,
           displayMode: "inline",
         },
@@ -75,4 +114,3 @@ export function installDevBootstrap(): void {
     }) as SetGlobalsEvent,
   );
 }
-

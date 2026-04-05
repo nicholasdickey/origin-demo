@@ -15,5 +15,11 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["*.mts", "server.ts", "api/**/*.ts", "mcp_server/**/*.ts"]
+  "include": [
+    "*.mts",
+    "server.ts",
+    "familysearchProbe.ts",
+    "api/**/*.ts",
+    "mcp_server/**/*.ts"
+  ]
 }

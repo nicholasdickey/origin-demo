@@ -45,7 +45,7 @@ export function createMcpAppsServer(): McpServer {
     {
       title: "Mock FamilySearch login",
       description:
-        "Open a mock view with the FamilySearch sign-in page embedded for demo purposes.",
+        "Open a simulated FamilySearch identity login screen in the widget (layout clone for demo; not the live site).",
       inputSchema: toolInputSchema,
       _meta: {
         ui: {
@@ -59,7 +59,7 @@ export function createMcpAppsServer(): McpServer {
         content: [
           {
             type: "text" as const,
-            text: "Opened mock FamilySearch login view in the Origin widget.",
+            text: "Opened simulated FamilySearch login view in the Origin widget.",
           },
         ],
         _meta: {
@@ -75,9 +75,9 @@ export function createMcpAppsServer(): McpServer {
     server,
     "showMockEmailApproval",
     {
-      title: "Mock archive email approval",
+      title: "Review proposed archive email",
       description:
-        "Open a mock email draft (Russian + English) to a Pskov archive for birth record research; user can approve or cancel.",
+        "Open the widget to review a proposed email (Russian draft + English reference). Edit the draft if needed, then approve or cancel.",
       inputSchema: toolInputSchema,
       _meta: {
         ui: {
@@ -91,7 +91,7 @@ export function createMcpAppsServer(): McpServer {
         content: [
           {
             type: "text" as const,
-            text: "Opened mock archive email approval in the Origin widget.",
+            text: "Opened email review — please approve or edit the proposed message in the Origin widget.",
           },
         ],
         _meta: {
@@ -104,12 +104,8 @@ export function createMcpAppsServer(): McpServer {
   );
 
   const widgetCSP = {
-    connect_domains: [
-      widgetDomain,
-      "https://www.familysearch.org",
-      "https://familysearch.org",
-    ],
-    resource_domains: [widgetDomain, "https://www.familysearch.org", "https://*.familysearch.org"],
+    connect_domains: [widgetDomain],
+    resource_domains: [widgetDomain],
   };
 
   registerAppResource(
