@@ -46,6 +46,9 @@ function devMockLoad(surface: string): WidgetLoadData {
   };
 }
 
+/** If `callServerTool` never settles, loading would stay true forever; match ChatVault-style timeouts. */
+const WIDGET_LOAD_TIMEOUT_MS = 45_000;
+
 /**
  * Calls `widgetLoadInternalData` on the MCP server (production) or returns mock data (dev).
  */
@@ -116,10 +119,22 @@ export function useWidgetInternalData(): {
         const toolName =
           nameArg ??
           (mcpApp.getHostContext?.()?.toolInfo?.tool?.name as string | undefined);
-        const result = await mcpApp.callServerTool({
-          name: "widgetLoadInternalData",
-          arguments: { ...args, ...(toolName ? { toolName } : {}) },
-        });
+        const loadArgs = { ...args, ...(toolName ? { toolName } : {}) };
+        const result = await Promise.race([
+          mcpApp.callServerTool({
+            name: "widgetLoadInternalData",
+            arguments: loadArgs,
+          }),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => {
+              reject(
+                new Error(
+                  `Widget load timed out after ${WIDGET_LOAD_TIMEOUT_MS / 1000}s (upstream MCP may be unreachable; check widgetCSP, connector, and proxy logs).`,
+                ),
+              );
+            }, WIDGET_LOAD_TIMEOUT_MS);
+          }),
+        ]);
         if (cancelled) return;
         if (result.isError) {
           const errPayload = {
