@@ -257,8 +257,10 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
         <div className="min-h-0 overflow-y-auto overflow-x-hidden p-3 font-mono text-[10px] leading-snug text-green-200/95">
           <p className="mb-2 font-semibold text-emerald-400/90">Log (newest first)</p>
           <p className="mb-2 text-[9px] leading-snug text-stone-500">
-            Persisted in this tab (sessionStorage). ChatGPT often dismisses the MCP panel after a few
-            seconds — reopen the tool, open Origin debug, then Copy logs to recover prior lines.
+            Persisted in this tab (sessionStorage). If the MCP bridge returns{" "}
+            <span className="text-amber-200/90">502 Bad Gateway</span>, ChatGPT closes the widget;
+            fix upstream (connector proxy → MCP server). Reopen the tool and Copy logs to recover
+            lines from before the failure.
           </p>
           <ul className="space-y-2">
             {logEntries.map((e, i) => (
