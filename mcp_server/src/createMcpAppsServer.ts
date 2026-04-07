@@ -97,9 +97,15 @@ export function createMcpAppsServer(): McpServer {
   });
 
   const widgetDomain = getWidgetDomain();
+  // Match ChatVault: allow MCP App transport to Agentsyx upstream (callServerTool / JSON-RPC).
+  // Without these, ChatGPT may block connections and widgetLoadInternalData never reaches the host.
   const widgetCSP = {
-    connect_domains: [widgetDomain],
-    resource_domains: [widgetDomain],
+    connect_domains: [
+      widgetDomain,
+      "https://www.agentsyx.com",
+      "https://agentsyx.com",
+    ],
+    resource_domains: [widgetDomain, "https://*.agentsyx.com"],
   };
 
   async function registerHtmlBundle(
