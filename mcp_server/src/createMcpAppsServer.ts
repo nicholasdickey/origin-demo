@@ -97,8 +97,9 @@ export function createMcpAppsServer(): McpServer {
   });
 
   const widgetDomain = getWidgetDomain();
-  // Match ChatVault: allow MCP App transport to Agentsyx upstream (callServerTool / JSON-RPC).
-  // Without these, ChatGPT may block connections and widgetLoadInternalData never reaches the host.
+  // Match ChatVault: production ChatGPT enforces openai/widgetCSP on the iframe; include Agentsyx
+  // so callServerTool can reach the upstream host. Developer mode often disables CSP — there,
+  // hangs are usually proxy/tool routing, not missing domains.
   const widgetCSP = {
     connect_domains: [
       widgetDomain,

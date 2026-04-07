@@ -129,7 +129,7 @@ export function useWidgetInternalData(): {
             setTimeout(() => {
               reject(
                 new Error(
-                  `Widget load timed out after ${WIDGET_LOAD_TIMEOUT_MS / 1000}s (upstream MCP may be unreachable; check widgetCSP, connector, and proxy logs).`,
+                  `Widget load timed out after ${WIDGET_LOAD_TIMEOUT_MS / 1000}s — callServerTool did not complete (check MCP proxy, connector, and whether widgetLoadInternalData is registered upstream). Note: ChatGPT developer mode disables widget CSP, so a hang here is usually not CSP.`,
                 ),
               );
             }, WIDGET_LOAD_TIMEOUT_MS);
