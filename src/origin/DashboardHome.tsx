@@ -1,7 +1,15 @@
+import { useEffect } from "react";
 import type { ArchiveProject } from "./widgetLoadTypes.js";
+import { addLog } from "./originDebugLog.js";
 
 export function DashboardHome(props: { projects: ArchiveProject[] }) {
   const { projects } = props;
+
+  useEffect(() => {
+    console.log("[Origin] DashboardHome", { projectCount: projects.length });
+    addLog("DashboardHome", { projectCount: projects.length });
+  }, [projects.length]);
+
   return (
     <div className="flex flex-col gap-6">
       <div>

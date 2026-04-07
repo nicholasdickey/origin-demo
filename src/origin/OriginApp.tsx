@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { addLog } from "./originDebugLog.js";
+import { OriginDebugPanel } from "./OriginDebugPanel.js";
 import { useOpenAiGlobal } from "../use-openai-global.js";
 import { useHostThemeSync } from "../useHostThemeSync.js";
 import {
@@ -167,6 +169,11 @@ function DevViewBar({ view }: { view: ResolvedOriginView }) {
 }
 
 function FamilyLoginPanel() {
+  useEffect(() => {
+    console.log("[Origin] FamilyLoginPanel mount");
+    addLog("FamilyLoginPanel mount", {});
+  }, []);
+
   return (
     <div className="flex min-h-[420px] flex-col gap-3">
       <MockFamilySearchLogin />
@@ -175,6 +182,11 @@ function FamilyLoginPanel() {
 }
 
 function EmailApprovalPanel() {
+  useEffect(() => {
+    console.log("[Origin] EmailApprovalPanel mount");
+    addLog("EmailApprovalPanel mount", {});
+  }, []);
+
   const [showEn, setShowEn] = useState(false);
   const [toRu, setToRu] = useState(EMAIL_TO_RU);
   const [ccRu, setCcRu] = useState(EMAIL_CC_RU);
@@ -341,43 +353,32 @@ function EmailApprovalPanel() {
   );
 }
 
-function DebugPanel() {
-  const [open, setOpen] = useState(false);
-  const meta = useOpenAiGlobal("toolResponseMetadata");
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "d") {
-        e.preventDefault();
-        setOpen((o) => !o);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  if (!open) {
-    return (
-      <p className="mt-2 text-center text-[10px] text-stone-400 dark:text-slate-500">
-        Ctrl+Alt+D debug
-      </p>
-    );
-  }
-
-  return (
-    <div className="mt-3 max-h-40 overflow-auto rounded border border-stone-200 bg-stone-900 p-2 font-mono text-[10px] text-green-200 dark:border-slate-600 dark:bg-slate-950">
-      <pre className="whitespace-pre-wrap">
-        {JSON.stringify({ toolResponseMetadata: meta }, null, 2)}
-      </pre>
-    </div>
-  );
-}
-
 export function OriginApp() {
   const view = useResolvedView();
   const { data: loadData, error: loadError, loading: loadLoading } =
     useWidgetInternalData();
   useHostThemeSync();
+
+  useEffect(() => {
+    const loadSummary = loadData
+      ? {
+          surface: loadData.surface,
+          projectCount:
+            loadData.surface === "dashboard" && "projects" in loadData
+              ? loadData.projects.length
+              : undefined,
+        }
+      : null;
+    const payload = {
+      view,
+      VITE_ORIGIN_SURFACE: import.meta.env.VITE_ORIGIN_SURFACE ?? null,
+      loadLoading,
+      loadError,
+      loadSummary,
+    };
+    console.log("[Origin] OriginApp state", payload);
+    addLog("OriginApp state", payload);
+  }, [view, loadData, loadError, loadLoading]);
 
   useEffect(() => {
     const u = loadData?.userInfo;
@@ -472,7 +473,19 @@ export function OriginApp() {
           </>
         )}
 
-        <DebugPanel />
+        <OriginDebugPanel
+          widgetLoad={{
+            loading: loadLoading,
+            error: loadError,
+            surface: loadData?.surface,
+            projectCount:
+              loadData?.surface === "dashboard" &&
+              loadData &&
+              "projects" in loadData
+                ? loadData.projects.length
+                : undefined,
+          }}
+        />
       </main>
     </div>
   );
