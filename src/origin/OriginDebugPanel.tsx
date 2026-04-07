@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useOpenAiGlobal } from "../use-openai-global.js";
 import {
   addLog,
@@ -18,6 +19,17 @@ export type WidgetLoadSummary = {
   surface: string | undefined;
   projectCount: number | undefined;
 };
+
+/** Host (McpWidgetHost) injects this so the iframe height tracks content. */
+function nudgeHostResize() {
+  try {
+    const fn = (window as unknown as { mcpWidgetResize?: () => void })
+      .mcpWidgetResize;
+    fn?.();
+  } catch {
+    /* ignore */
+  }
+}
 
 function sliceJson(value: unknown, max = 6000): string {
   try {
@@ -75,27 +87,46 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [toggle]);
 
+  useEffect(() => {
+    nudgeHostResize();
+    const t = window.setTimeout(() => nudgeHostResize(), 100);
+    const t2 = window.setTimeout(() => nudgeHostResize(), 400);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(t2);
+    };
+  }, [open, logVersion]);
+
+  const zMax = { zIndex: 2147483647 } as const;
+
   if (!open) {
-    /* Fixed so it stays visible without scrolling; above EmailApproval fixed bars (z-10). */
-    return (
-      <div className="pointer-events-none fixed bottom-3 left-3 z-[200] flex flex-col items-start gap-1">
+    /* Portal to body + max z-index: avoids overflow/stacking issues inside #origin-root. */
+    return createPortal(
+      <div
+        className="pointer-events-none fixed bottom-3 left-3 flex flex-col items-start gap-1"
+        style={zMax}
+      >
         <button
           type="button"
-          className="pointer-events-auto rounded-lg border border-stone-400/80 bg-stone-900/95 px-3 py-2 text-left text-[11px] font-medium text-emerald-200 shadow-lg backdrop-blur hover:bg-stone-800 dark:border-slate-500 dark:bg-slate-950/95 dark:text-emerald-200/95"
+          className="pointer-events-auto rounded-lg border-2 border-amber-400 bg-stone-950 px-3 py-2 text-left text-[11px] font-semibold text-amber-100 shadow-xl ring-2 ring-amber-500/30 hover:bg-stone-900 dark:border-amber-500/80 dark:bg-slate-950 dark:text-amber-100"
           onClick={toggle}
           title="Open Origin debug panel (or press Ctrl+Alt+D while this widget is focused)"
         >
           Origin debug
-          <span className="mt-0.5 block font-normal text-[9px] text-stone-400 dark:text-slate-500">
+          <span className="mt-0.5 block font-normal text-[9px] text-amber-200/90">
             Click or Ctrl+Alt+D (focus iframe first)
           </span>
         </button>
-      </div>
+      </div>,
+      document.body,
     );
   }
 
-  return (
-    <div className="fixed bottom-0 left-0 right-0 z-[200] max-h-[min(70vh,520px)] border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80">
+  return createPortal(
+    <div
+      className="fixed bottom-0 left-0 right-0 max-h-[min(70vh,520px)] border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80"
+      style={zMax}
+    >
       <div className="flex items-center justify-between gap-2 border-b border-stone-700/80 px-3 py-1.5 font-mono text-[11px] text-emerald-300/95">
         <span>Origin debug</span>
         <button
@@ -149,6 +180,7 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
           </ul>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -3,3 +3,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Host may inject overflow:hidden on html/body; keep root filling the iframe. */
+html,
+body {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+#origin-root {
+  width: 100%;
+  min-height: 100%;
+}
