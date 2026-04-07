@@ -41,6 +41,21 @@ function sliceJson(value: unknown, max = 6000): string {
   }
 }
 
+function formatLogsForClipboard(
+  entries: ReturnType<typeof getOriginDebugLogs>,
+): string {
+  const lines: string[] = [];
+  for (const e of entries) {
+    lines.push(`[${e.timestamp}] ${e.message}`);
+    if (e.data) lines.push(e.data);
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}
+
+const btnClass =
+  "rounded-md border border-stone-500 bg-stone-800 px-3 py-2 text-[11px] font-medium text-stone-100 hover:bg-stone-700 active:bg-stone-600 dark:border-slate-500 dark:bg-slate-800 dark:hover:bg-slate-700";
+
 export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
   const { widgetLoad } = props;
   const toolInput = useOpenAiGlobal("toolInput");
@@ -65,6 +80,58 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
     [logVersion],
   );
   const mcpStatus = useMemo(() => getMcpConnectStatus(), [mcpVersion]);
+
+  const stateForCopy = useMemo(
+    () => ({
+      VITE_ORIGIN_SURFACE: surfaceEnv,
+      widgetLoad,
+      mcpConnect: mcpStatus,
+    }),
+    [surfaceEnv, widgetLoad, mcpStatus],
+  );
+
+  const copyToClipboard = useCallback(
+    async (text: string, label: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        addLog(`Clipboard: copied ${label}`, { bytes: text.length });
+      } catch (e) {
+        addLog(`Clipboard: copy failed (${label})`, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [],
+  );
+
+  const copyState = useCallback(() => {
+    void copyToClipboard(
+      JSON.stringify(stateForCopy, null, 2),
+      "state",
+    );
+  }, [copyToClipboard, stateForCopy]);
+
+  const copyLogs = useCallback(() => {
+    const newestFirst = [...getOriginDebugLogs()].reverse();
+    void copyToClipboard(formatLogsForClipboard(newestFirst), "logs");
+  }, [copyToClipboard]);
+
+  const copyAll = useCallback(() => {
+    const payload = {
+      ...stateForCopy,
+      toolInput,
+      toolOutput,
+      toolResponseMetadata,
+      logs: getOriginDebugLogs(),
+    };
+    void copyToClipboard(JSON.stringify(payload, null, 2), "all");
+  }, [
+    copyToClipboard,
+    stateForCopy,
+    toolInput,
+    toolOutput,
+    toolResponseMetadata,
+  ]);
 
   const toggle = useCallback(() => {
     setOpen((prev) => {
@@ -124,21 +191,48 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
 
   return createPortal(
     <div
-      className="fixed bottom-0 left-0 right-0 max-h-[min(70vh,520px)] border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80"
+      className="fixed bottom-0 left-0 right-0 flex max-h-[min(70vh,520px)] flex-col border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80"
       style={zMax}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-stone-700/80 px-3 py-1.5 font-mono text-[11px] text-emerald-300/95">
-        <span>Origin debug</span>
-        <button
-          type="button"
-          className="rounded border border-stone-600 px-2 py-0.5 text-[10px] text-stone-200 hover:bg-stone-800"
-          onClick={toggle}
-        >
-          Close
-        </button>
+      <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-stone-700/80 px-3 py-2 font-mono text-[11px] text-emerald-300/95">
+        <span className="font-semibold">Origin debug</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={btnClass}
+            title="Copy State block (surface, widgetLoad, mcpConnect) as JSON"
+            onClick={copyState}
+          >
+            Copy state
+          </button>
+          <button
+            type="button"
+            className={btnClass}
+            title="Copy all log lines to the clipboard"
+            onClick={copyLogs}
+          >
+            Copy logs
+          </button>
+          <button
+            type="button"
+            className={btnClass}
+            title="Copy state + tool globals + raw log entries as one JSON"
+            onClick={copyAll}
+          >
+            Copy all
+          </button>
+          <button
+            type="button"
+            className={`${btnClass} border-amber-700/80 text-amber-100`}
+            title="Close debug panel"
+            onClick={toggle}
+          >
+            Close
+          </button>
+        </div>
       </div>
-      <div className="grid max-h-[calc(min(70vh,520px)-2.5rem)] grid-cols-1 gap-0 overflow-hidden md:grid-cols-2">
-        <div className="max-h-full overflow-auto border-b border-stone-800 p-3 font-mono text-[10px] leading-snug text-green-200/95 md:border-b-0 md:border-r">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 md:grid-cols-2">
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden border-b border-stone-800 p-3 font-mono text-[10px] leading-snug text-green-200/95 md:border-b-0 md:border-r md:border-stone-800">
           <p className="mb-2 font-semibold text-emerald-400/90">State</p>
           <pre className="mb-3 whitespace-pre-wrap break-words text-stone-300">
             {sliceJson({
@@ -148,19 +242,19 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
             })}
           </pre>
           <p className="mb-1 font-semibold text-emerald-400/90">toolInput</p>
-          <pre className="mb-3 whitespace-pre-wrap break-words text-stone-300">
+          <pre className="mb-3 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-stone-300">
             {sliceJson(toolInput)}
           </pre>
           <p className="mb-1 font-semibold text-emerald-400/90">toolOutput</p>
-          <pre className="mb-3 whitespace-pre-wrap break-words text-stone-300">
+          <pre className="mb-3 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-stone-300">
             {sliceJson(toolOutput)}
           </pre>
           <p className="mb-1 font-semibold text-emerald-400/90">toolResponseMetadata</p>
-          <pre className="whitespace-pre-wrap break-words text-stone-300">
+          <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-stone-300">
             {sliceJson(toolResponseMetadata)}
           </pre>
         </div>
-        <div className="max-h-full overflow-auto p-3 font-mono text-[10px] leading-snug text-green-200/95">
+        <div className="min-h-0 overflow-y-auto overflow-x-hidden p-3 font-mono text-[10px] leading-snug text-green-200/95">
           <p className="mb-2 font-semibold text-emerald-400/90">Log (newest first)</p>
           <ul className="space-y-2">
             {logEntries.map((e, i) => (
@@ -171,7 +265,7 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
                 <div className="text-[9px] text-stone-500">{e.timestamp}</div>
                 <div className="text-emerald-200/90">{e.message}</div>
                 {e.data ? (
-                  <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[9px] text-stone-400">
+                  <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-[9px] text-stone-400">
                     {e.data}
                   </pre>
                 ) : null}
