@@ -9,8 +9,12 @@ import {
 function parseViewFromUrl(): OriginView {
   const params = new URLSearchParams(window.location.search);
   const v = params.get("view");
-  if (v === "emailApproval" || v === "familyLogin") return v;
-  return "familyLogin";
+  if (v === "emailApproval" || v === "familyLogin" || v === "dashboard")
+    return v;
+  const surface = import.meta.env.VITE_ORIGIN_SURFACE;
+  if (surface === "emailApproval" || surface === "familyLogin" || surface === "dashboard")
+    return surface;
+  return "dashboard";
 }
 
 function parseThemeFromUrl(): "light" | "dark" {

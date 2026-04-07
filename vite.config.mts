@@ -4,6 +4,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    "import.meta.env.VITE_ORIGIN_SURFACE": JSON.stringify("dashboard"),
+  },
   build: {
     outDir: "dist",
   },

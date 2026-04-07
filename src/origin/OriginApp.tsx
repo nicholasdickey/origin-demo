@@ -10,9 +10,12 @@ import {
   type ResolvedOriginView,
   parseViewFromHostPayload,
   parseViewFromToolInput,
+  parseSurfaceFromBundle,
 } from "./originViews.js";
 import { MockFamilySearchLogin } from "./MockFamilySearchLogin.js";
 import { OriginHeader } from "./OriginHeader.js";
+import { DashboardHome } from "./DashboardHome.js";
+import { useWidgetInternalData } from "./useWidgetInternalData.js";
 
 const EMAIL_TO_RU =
   "Государственный архив Псковской области <zapros@gosarchiv.pskov.ru>";
@@ -99,17 +102,24 @@ function useResolvedView(): ResolvedOriginView {
     parseViewFromToolInput(toolInput) ??
     parseViewFromHostPayload(toolResponseMetadata) ??
     undefined;
-  if (fromHost === "familyLogin" || fromHost === "emailApproval") {
+  if (
+    fromHost === "dashboard" ||
+    fromHost === "familyLogin" ||
+    fromHost === "emailApproval"
+  ) {
     return fromHost;
   }
 
   if (typeof window !== "undefined") {
     const q = new URLSearchParams(window.location.search).get("view");
-    if (q === "familyLogin" || q === "emailApproval") return q;
+    if (q === "dashboard" || q === "familyLogin" || q === "emailApproval")
+      return q;
   }
 
-  // Do not default to familyLogin: the host often applies tool metadata one tick
-  // after first paint; defaulting caused a flash of the wrong screen (e.g. email tool).
+  // Cached bundle implies a single surface — use it when the host has not injected metadata yet.
+  const bundle = parseSurfaceFromBundle();
+  if (bundle) return bundle;
+
   return "pending";
 }
 
@@ -128,6 +138,13 @@ function DevViewBar({ view }: { view: ResolvedOriginView }) {
   return (
     <div className="flex flex-wrap gap-2 border-b border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-slate-600/80 dark:bg-slate-800/70 dark:text-slate-200">
       <span className="font-medium">Dev:</span>
+      <button
+        type="button"
+        className={`rounded px-2 py-0.5 ${view === "dashboard" ? "bg-amber-200 dark:bg-slate-600/90" : "bg-white/80 dark:bg-slate-900/50"}`}
+        onClick={() => setDevViewLocal("dashboard")}
+      >
+        dashboard
+      </button>
       <button
         type="button"
         className={`rounded px-2 py-0.5 ${view === "familyLogin" ? "bg-amber-200 dark:bg-slate-600/90" : "bg-white/80 dark:bg-slate-900/50"}`}
@@ -358,7 +375,22 @@ function DebugPanel() {
 
 export function OriginApp() {
   const view = useResolvedView();
+  const { data: loadData, error: loadError, loading: loadLoading } =
+    useWidgetInternalData();
   useHostThemeSync();
+
+  useEffect(() => {
+    const u = loadData?.userInfo;
+    if (!u || !window.openai?.setWidgetState) return;
+    void window.openai.setWidgetState({
+      userName: u.userName,
+      isAnonymous: u.isAnon,
+      portalLink: u.portalLink ?? undefined,
+      loginLink: u.loginLink ?? undefined,
+      isAnonymousPlan: u.isAnonymousPlan,
+      remainingSlots: u.remainingSlots,
+    });
+  }, [loadData]);
 
   useEffect(() => {
     if (!import.meta.env.DEV) return;
@@ -366,7 +398,7 @@ export function OriginApp() {
       if (e.detail.globals.toolResponseMetadata) {
         const v = (e.detail.globals.toolResponseMetadata as { view?: string })
           ?.view;
-        if (v === "familyLogin" || v === "emailApproval") {
+        if (v === "dashboard" || v === "familyLogin" || v === "emailApproval") {
           const url = new URL(window.location.href);
           url.searchParams.set("view", v);
           window.history.replaceState({}, "", url.toString());
@@ -383,7 +415,7 @@ export function OriginApp() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-100 to-stone-200 text-stone-900 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:text-slate-100">
-      <OriginHeader />
+      <OriginHeader loadedUserInfo={loadData?.userInfo} />
 
       <DevViewBar view={view} />
 
@@ -406,6 +438,25 @@ export function OriginApp() {
               try running the tool again from the conversation.
             </p>
           </div>
+        ) : view === "dashboard" ? (
+          <>
+            {loadError ? (
+              <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
+            ) : null}
+            {loadLoading && !loadData ? (
+              <div
+                className="flex min-h-[200px] items-center justify-center gap-2 text-stone-600 dark:text-slate-400"
+                role="status"
+              >
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-teal-600 border-t-transparent dark:border-teal-400" />
+                Loading dashboard…
+              </div>
+            ) : loadData?.surface === "dashboard" ? (
+              <DashboardHome projects={loadData.projects} />
+            ) : (
+              <DashboardHome projects={[]} />
+            )}
+          </>
         ) : view === "familyLogin" ? (
           <FamilyLoginPanel />
         ) : (

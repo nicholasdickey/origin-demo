@@ -1,6 +1,9 @@
 node_modules/
 dist/
 assets/mcp-app.html
+assets/mcp-app-dashboard.html
+assets/mcp-app-family.html
+assets/mcp-app-email.html
 .env
 .env.*
 !.env.example

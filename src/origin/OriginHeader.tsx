@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useOpenAiGlobal } from "../use-openai-global.js";
 import { ORIGIN_LOGIN_URL, ORIGIN_SAAS_URL } from "../config/site.js";
 import type { OriginWidgetState } from "./originWidgetState.js";
+import type { OriginUserInfo } from "./widgetLoadTypes.js";
 import {
   IconFullscreen,
   IconFullscreenExit,
@@ -25,9 +26,35 @@ const loginBtn =
   "border-stone-300 bg-white text-stone-700 hover:bg-stone-50 " +
   "dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700";
 
-export function OriginHeader() {
+function mergeHeaderState(
+  widgetState: OriginWidgetState | null,
+  loaded: OriginUserInfo | null | undefined,
+): OriginWidgetState | null {
+  if (!loaded && !widgetState) return null;
+  const w = widgetState ?? {};
+  return {
+    ...w,
+    userName: loaded?.userName ?? w.userName,
+    isAnonymous:
+      loaded !== undefined && loaded !== null
+        ? loaded.isAnon
+        : w.isAnonymous,
+    portalLink: loaded?.portalLink ?? w.portalLink ?? null,
+    loginLink: loaded?.loginLink ?? w.loginLink ?? null,
+    isAnonymousPlan: loaded?.isAnonymousPlan ?? w.isAnonymousPlan,
+    remainingSlots: loaded?.remainingSlots ?? w.remainingSlots,
+  };
+}
+
+export function OriginHeader(props: {
+  /** From `widgetLoadInternalData` / `_meta.userInfo` (ChatVault parity). */
+  loadedUserInfo?: OriginUserInfo | null;
+}) {
+  const { loadedUserInfo } = props;
   const displayMode = useOpenAiGlobal("displayMode") ?? "inline";
   const widgetState = useOpenAiGlobal("widgetState") as OriginWidgetState | null;
+
+  const merged = mergeHeaderState(widgetState, loadedUserInfo ?? null);
 
   const openExternal = useCallback((href: string) => {
     if (window.openai?.openExternal) {
@@ -42,8 +69,9 @@ export function OriginHeader() {
   }, [openExternal]);
 
   const onLogin = useCallback(() => {
-    openExternal(ORIGIN_LOGIN_URL);
-  }, [openExternal]);
+    const link = merged?.loginLink ?? ORIGIN_LOGIN_URL;
+    openExternal(link);
+  }, [merged?.loginLink, openExternal]);
 
   const onFullscreen = useCallback(async () => {
     const next = displayMode === "fullscreen" ? "inline" : "fullscreen";
@@ -54,10 +82,15 @@ export function OriginHeader() {
     }
   }, [displayMode]);
 
-  const showLoggedChip =
-    widgetState !== null &&
-    widgetState.isAnonymous !== true &&
-    Boolean(widgetState.userName?.trim());
+  const showNameChip =
+    merged !== null &&
+    merged.isAnonymous !== true &&
+    Boolean(merged.userName?.trim());
+
+  const showSignIn =
+    !showNameChip &&
+    merged?.isAnonymousPlan &&
+    Boolean(merged.portalLink?.trim());
 
   return (
     <header className="border-b border-stone-200/80 bg-white/90 px-3 py-3.5 backdrop-blur sm:px-4 dark:border-slate-700/70 dark:bg-slate-900/80">
@@ -81,14 +114,27 @@ export function OriginHeader() {
         </div>
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          {showLoggedChip ? (
+          {showNameChip ? (
             <button
               type="button"
               className={textBtn}
               title="Open on website"
               onClick={onOpenSaaS}
             >
-              {widgetState?.userName}
+              {merged?.userName}
+            </button>
+          ) : showSignIn ? (
+            <button
+              type="button"
+              className={loginBtn}
+              title="Sign in"
+              onClick={() => {
+                const url = merged?.portalLink ?? merged?.loginLink ?? ORIGIN_LOGIN_URL;
+                openExternal(url);
+              }}
+            >
+              <IconLogin className="h-4 w-4" />
+              <span className="hidden sm:inline">Sign in</span>
             </button>
           ) : (
             <button
@@ -101,6 +147,16 @@ export function OriginHeader() {
               <span className="hidden sm:inline">Login</span>
             </button>
           )}
+
+          {merged?.isAnonymousPlan &&
+            merged.remainingSlots !== undefined && (
+              <span
+                className="rounded-lg border border-stone-300 px-2 py-1 text-xs font-medium text-stone-700 dark:border-slate-600 dark:text-slate-300"
+                title="Remaining slots"
+              >
+                {merged.remainingSlots}
+              </span>
+            )}
 
           <button
             type="button"

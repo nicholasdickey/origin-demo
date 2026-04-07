@@ -1,4 +1,4 @@
-export type OriginView = "familyLogin" | "emailApproval";
+export type OriginView = "dashboard" | "familyLogin" | "emailApproval";
 
 /** Shown until host injects tool metadata (avoids flashing the wrong default view). */
 export type ResolvedOriginView = OriginView | "pending";
@@ -12,13 +12,21 @@ export function parseViewFromHostPayload(
   if (!payload || typeof payload !== "object") return undefined;
   const o = payload as Record<string, unknown>;
   const direct = o.view;
-  if (direct === "familyLogin" || direct === "emailApproval") {
+  if (
+    direct === "dashboard" ||
+    direct === "familyLogin" ||
+    direct === "emailApproval"
+  ) {
     return direct;
   }
   const meta = o._meta;
   if (meta && typeof meta === "object") {
     const v = (meta as Record<string, unknown>).view;
-    if (v === "familyLogin" || v === "emailApproval") {
+    if (
+      v === "dashboard" ||
+      v === "familyLogin" ||
+      v === "emailApproval"
+    ) {
       return v;
     }
   }
@@ -39,5 +47,14 @@ export function parseViewFromToolInput(input: unknown): OriginView | undefined {
           : undefined;
   if (name === "showMockEmailApproval") return "emailApproval";
   if (name === "showMockFamilySearchLogin") return "familyLogin";
+  if (name === "showOriginDashboard") return "dashboard";
+  return undefined;
+}
+
+export function parseSurfaceFromBundle(): OriginView | undefined {
+  const s = import.meta.env.VITE_ORIGIN_SURFACE;
+  if (s === "dashboard" || s === "familyLogin" || s === "emailApproval") {
+    return s;
+  }
   return undefined;
 }

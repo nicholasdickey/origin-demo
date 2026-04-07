@@ -8,17 +8,87 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import {
+  buildUserInfoFromHeaders,
+  buildWidgetLoadResult,
+  resolveOpeningSlug,
+  widgetLoadArgumentsSchema,
+} from "./widgetLoadInternalData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, "..", "..");
 const ASSETS_DIR = path.resolve(ROOT_DIR, "assets");
 
+/** One immutable HTML bundle per surface (Agentsyx default = dashboard). */
+export const ORIGIN_RESOURCE_URIS = {
+  dashboard: "ui://origin-by-genisent/mcp-app-dashboard.html",
+  familyLogin: "ui://origin-by-genisent/mcp-app-family.html",
+  emailApproval: "ui://origin-by-genisent/mcp-app-email.html",
+} as const;
+
+const ASSET_FILES = {
+  dashboard: "mcp-app-dashboard.html",
+  familyLogin: "mcp-app-family.html",
+  emailApproval: "mcp-app-email.html",
+} as const;
+
+const toolInputSchema = {
+  note: z.string().optional(),
+};
+
+function getWidgetDomain(): string {
+  return process.env.WIDGET_DOMAIN
+    ? process.env.WIDGET_DOMAIN.replace(/\/$/, "")
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`
+      : "http://localhost:3001";
+}
+
+function readHeadersFromExtra(
+  extra: { requestInfo?: { headers?: Record<string, string | string[] | undefined> } } | undefined,
+): Record<string, string> | undefined {
+  const raw = extra?.requestInfo?.headers;
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (typeof v === "string") out[k] = v;
+    else if (Array.isArray(v) && typeof v[0] === "string") out[k] = v[0];
+  }
+  return out;
+}
+
+async function readWidgetHtml(assetFile: string): Promise<string> {
+  const possiblePaths = [
+    path.join(ASSETS_DIR, assetFile),
+    path.join(process.cwd(), "assets", assetFile),
+  ];
+
+  let html: string | null = null;
+  let lastError: Error | null = null;
+
+  for (const htmlPath of possiblePaths) {
+    try {
+      html = await fs.readFile(htmlPath, "utf-8");
+      break;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  if (!html) {
+    throw new Error(
+      `Failed to find ${assetFile}. Tried: ${possiblePaths.join(", ")}. Last error: ${lastError?.message}`,
+    );
+  }
+  return html;
+}
+
 /**
  * Create and configure the MCP Apps server for Origin By Genisent demo.
  *
- * This server:
- * - Exposes showMockFamilySearchLogin and showMockEmailApproval tools
- * - Registers the MCP App UI resource at ui://origin-by-genisent/mcp-app.html
+ * - Three cached UI resources (dashboard default, FamilySearch mock, email mock).
+ * - Opening tools each point at their own `ui://…` bundle.
+ * - `widgetLoadInternalData` returns domain payload + `_meta.userInfo` (header chrome).
  */
 export function createMcpAppsServer(): McpServer {
   const server = new McpServer({
@@ -26,11 +96,89 @@ export function createMcpAppsServer(): McpServer {
     version: "0.1.0",
   });
 
-  const resourceUri = "ui://origin-by-genisent/mcp-app.html";
-
-  const toolInputSchema = {
-    note: z.string().optional(),
+  const widgetDomain = getWidgetDomain();
+  const widgetCSP = {
+    connect_domains: [widgetDomain],
+    resource_domains: [widgetDomain],
   };
+
+  async function registerHtmlBundle(
+    resourceUri: string,
+    assetFile: string,
+  ): Promise<void> {
+    registerAppResource(
+      server as unknown as Parameters<typeof registerAppResource>[0],
+      resourceUri,
+      resourceUri,
+      { mimeType: RESOURCE_MIME_TYPE },
+      async () => {
+        const html = await readWidgetHtml(assetFile);
+        return {
+          contents: [
+            {
+              uri: resourceUri,
+              mimeType: RESOURCE_MIME_TYPE,
+              text: html,
+              _meta: {
+                "openai/outputTemplate": resourceUri,
+                "openai/widgetPrefersBorder": true,
+                "openai/widgetDomain": widgetDomain,
+                "openai/widgetCSP": widgetCSP,
+              },
+            },
+          ],
+        };
+      },
+    );
+  }
+
+  void registerHtmlBundle(
+    ORIGIN_RESOURCE_URIS.dashboard,
+    ASSET_FILES.dashboard,
+  );
+  void registerHtmlBundle(
+    ORIGIN_RESOURCE_URIS.familyLogin,
+    ASSET_FILES.familyLogin,
+  );
+  void registerHtmlBundle(
+    ORIGIN_RESOURCE_URIS.emailApproval,
+    ASSET_FILES.emailApproval,
+  );
+
+  registerAppTool(
+    server,
+    "showOriginDashboard",
+    {
+      title: "Origin dashboard",
+      description:
+        "Open the Origin home dashboard: ongoing archive research projects and outstanding search threads (default Agentsyx app surface).",
+      inputSchema: toolInputSchema,
+      _meta: {
+        ui: {
+          resourceUri: ORIGIN_RESOURCE_URIS.dashboard,
+        },
+      },
+    },
+    async (args) => {
+      console.log("[MCP] showOriginDashboard handler called", {
+        argsKeys: args ? Object.keys(args) : [],
+      });
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "Opened Origin dashboard — ongoing archive projects and threads.",
+          },
+        ],
+        _meta: {
+          ui: { resourceUri: ORIGIN_RESOURCE_URIS.dashboard },
+          "ui/resourceUri": ORIGIN_RESOURCE_URIS.dashboard,
+          view: "dashboard",
+          toolName: "showOriginDashboard",
+        },
+      };
+    },
+  );
 
   registerAppTool(
     server,
@@ -42,7 +190,7 @@ export function createMcpAppsServer(): McpServer {
       inputSchema: toolInputSchema,
       _meta: {
         ui: {
-          resourceUri,
+          resourceUri: ORIGIN_RESOURCE_URIS.familyLogin,
         },
       },
     },
@@ -58,9 +206,10 @@ export function createMcpAppsServer(): McpServer {
           },
         ],
         _meta: {
-          ui: { resourceUri },
-          "ui/resourceUri": resourceUri,
+          ui: { resourceUri: ORIGIN_RESOURCE_URIS.familyLogin },
+          "ui/resourceUri": ORIGIN_RESOURCE_URIS.familyLogin,
           view: "familyLogin",
+          toolName: "showMockFamilySearchLogin",
         },
       };
     },
@@ -76,7 +225,7 @@ export function createMcpAppsServer(): McpServer {
       inputSchema: toolInputSchema,
       _meta: {
         ui: {
-          resourceUri,
+          resourceUri: ORIGIN_RESOURCE_URIS.emailApproval,
         },
       },
     },
@@ -92,69 +241,48 @@ export function createMcpAppsServer(): McpServer {
           },
         ],
         _meta: {
-          ui: { resourceUri },
-          "ui/resourceUri": resourceUri,
+          ui: { resourceUri: ORIGIN_RESOURCE_URIS.emailApproval },
+          "ui/resourceUri": ORIGIN_RESOURCE_URIS.emailApproval,
           view: "emailApproval",
+          toolName: "showMockEmailApproval",
         },
       };
     },
   );
 
-  registerAppResource(
-    server as unknown as Parameters<typeof registerAppResource>[0],
-    resourceUri,
-    resourceUri,
-    { mimeType: RESOURCE_MIME_TYPE },
-    async () => {
-      const possiblePaths = [
-        path.join(ASSETS_DIR, "mcp-app.html"),
-        path.join(process.cwd(), "assets", "mcp-app.html"),
-      ];
+  server.registerTool(
+    "widgetLoadInternalData",
+    {
+      title: "Load Origin widget data",
+      description:
+        "Authoritative data for the Origin MCP App widget: user header info from gateway headers and surface-specific payload. Prefer routing by x-a6-upstream-tool-slug.",
+      inputSchema: widgetLoadArgumentsSchema,
+    },
+    async (args, extra) => {
+      const parsed = widgetLoadArgumentsSchema.safeParse(args ?? {});
+      const rawArgs = parsed.success ? parsed.data : {};
+      const headers = readHeadersFromExtra(extra);
+      const userInfo = buildUserInfoFromHeaders(headers);
+      const upstreamSlug = resolveOpeningSlug(
+        headers,
+        typeof rawArgs.toolName === "string" ? rawArgs.toolName : undefined,
+      );
 
-      let html: string | null = null;
-      let lastError: Error | null = null;
+      const { structuredContent, _meta, text } = buildWidgetLoadResult({
+        upstreamSlug,
+        userInfo,
+      });
 
-      for (const htmlPath of possiblePaths) {
-        try {
-          html = await fs.readFile(htmlPath, "utf-8");
-          break;
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
-          continue;
-        }
-      }
-
-      if (!html) {
-        throw new Error(
-          `Failed to find mcp-app.html. Tried: ${possiblePaths.join(", ")}. Last error: ${lastError?.message}`,
-        );
-      }
-
-      const widgetDomain = process.env.WIDGET_DOMAIN
-        ? process.env.WIDGET_DOMAIN.replace(/\/$/, "")
-        : process.env.VERCEL_URL
-          ? `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`
-          : "http://localhost:3001";
-
-      const widgetCSP = {
-        connect_domains: [widgetDomain],
-        resource_domains: [widgetDomain],
-      };
+      console.log("[MCP] widgetLoadInternalData", {
+        upstreamSlug,
+        hasUserName: Boolean(userInfo.userName),
+        isAnon: userInfo.isAnon,
+      });
 
       return {
-        contents: [
-          {
-            uri: resourceUri,
-            mimeType: RESOURCE_MIME_TYPE,
-            text: html,
-            _meta: {
-              "openai/outputTemplate": resourceUri,
-              "openai/widgetPrefersBorder": true,
-              "openai/widgetDomain": widgetDomain,
-              "openai/widgetCSP": widgetCSP,
-            },
-          },
-        ],
+        content: [{ type: "text" as const, text }],
+        structuredContent,
+        _meta,
       };
     },
   );

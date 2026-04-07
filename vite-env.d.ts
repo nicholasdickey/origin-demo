@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_ORIGIN_SAAS_URL?: string;
   /** Login URL for “Login” when the user is anonymous. */
   readonly VITE_ORIGIN_LOGIN_URL?: string;
+  /** Which single-file MCP bundle this build is (`dashboard` | `familyLogin` | `emailApproval`). */
+  readonly VITE_ORIGIN_SURFACE: string;
 }
 
 interface ImportMeta {
