@@ -158,12 +158,20 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
     nudgeHostResize();
     const t = window.setTimeout(() => nudgeHostResize(), 100);
     const t2 = window.setTimeout(() => nudgeHostResize(), 400);
+    const t3 = window.setTimeout(() => nudgeHostResize(), 800);
+    const raf = window.requestAnimationFrame(() => {
+      nudgeHostResize();
+      window.requestAnimationFrame(() => nudgeHostResize());
+    });
     return () => {
+      window.cancelAnimationFrame(raf);
       window.clearTimeout(t);
       window.clearTimeout(t2);
+      window.clearTimeout(t3);
     };
   }, [open, logVersion]);
 
+  /** FAB only: stay above iframe content. Open panel is in-flow so scrollHeight grows. */
   const zMax = { zIndex: 2147483647 } as const;
 
   if (!open) {
@@ -189,10 +197,11 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
     );
   }
 
-  return createPortal(
-    <div
-      className="fixed bottom-0 left-0 right-0 flex max-h-[min(70vh,520px)] flex-col border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80"
-      style={zMax}
+  /* In document flow (not fixed) so body scrollHeight grows and the host iframe height increases. */
+  return (
+    <section
+      className="mt-8 flex w-full flex-col rounded-lg border border-stone-600/90 bg-stone-950/98 shadow-lg backdrop-blur dark:border-slate-500/80"
+      aria-label="Origin debug"
     >
       <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-stone-700/80 px-3 py-2 font-mono text-[11px] text-emerald-300/95">
         <span className="font-semibold">Origin debug</span>
@@ -231,7 +240,7 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
           </button>
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 md:grid-cols-2">
+      <div className="grid min-h-[min(55vh,480px)] max-h-[min(70vh,640px)] grid-cols-1 gap-0 overflow-hidden md:grid-cols-2">
         <div className="min-h-0 overflow-y-auto overflow-x-hidden border-b border-stone-800 p-3 font-mono text-[10px] leading-snug text-green-200/95 md:border-b-0 md:border-r md:border-stone-800">
           <p className="mb-2 font-semibold text-emerald-400/90">State</p>
           <pre className="mb-3 whitespace-pre-wrap break-words text-stone-300">
@@ -274,7 +283,6 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
           </ul>
         </div>
       </div>
-    </div>,
-    document.body,
+    </section>
   );
 }
