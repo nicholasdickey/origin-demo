@@ -76,15 +76,26 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
   }, [toggle]);
 
   if (!open) {
+    /* Fixed so it stays visible without scrolling; above EmailApproval fixed bars (z-10). */
     return (
-      <p className="mt-2 text-center text-[10px] text-stone-400 dark:text-slate-500">
-        Ctrl+Alt+D — Origin debug
-      </p>
+      <div className="pointer-events-none fixed bottom-3 left-3 z-[200] flex flex-col items-start gap-1">
+        <button
+          type="button"
+          className="pointer-events-auto rounded-lg border border-stone-400/80 bg-stone-900/95 px-3 py-2 text-left text-[11px] font-medium text-emerald-200 shadow-lg backdrop-blur hover:bg-stone-800 dark:border-slate-500 dark:bg-slate-950/95 dark:text-emerald-200/95"
+          onClick={toggle}
+          title="Open Origin debug panel (or press Ctrl+Alt+D while this widget is focused)"
+        >
+          Origin debug
+          <span className="mt-0.5 block font-normal text-[9px] text-stone-400 dark:text-slate-500">
+            Click or Ctrl+Alt+D (focus iframe first)
+          </span>
+        </button>
+      </div>
     );
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[100] max-h-[min(70vh,520px)] border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80">
+    <div className="fixed bottom-0 left-0 right-0 z-[200] max-h-[min(70vh,520px)] border-t border-stone-600/90 bg-stone-950/98 shadow-[0_-8px_32px_rgba(0,0,0,0.35)] backdrop-blur dark:border-slate-500/80">
       <div className="flex items-center justify-between gap-2 border-b border-stone-700/80 px-3 py-1.5 font-mono text-[11px] text-emerald-300/95">
         <span>Origin debug</span>
         <button
