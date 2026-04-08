@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 import { useOpenAiGlobal } from "../use-openai-global.js";
 import {
   addLog,
@@ -159,6 +158,16 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
     const t = window.setTimeout(() => nudgeHostResize(), 100);
     const t2 = window.setTimeout(() => nudgeHostResize(), 400);
     const t3 = window.setTimeout(() => nudgeHostResize(), 800);
+    /** When the panel closes, the host iframe often needs extra nudges after layout settles. */
+    const collapse =
+      !open
+        ? [
+            window.setTimeout(() => nudgeHostResize(), 0),
+            window.setTimeout(() => nudgeHostResize(), 50),
+            window.setTimeout(() => nudgeHostResize(), 200),
+            window.setTimeout(() => nudgeHostResize(), 600),
+          ]
+        : [];
     const raf = window.requestAnimationFrame(() => {
       nudgeHostResize();
       window.requestAnimationFrame(() => nudgeHostResize());
@@ -168,33 +177,12 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
       window.clearTimeout(t);
       window.clearTimeout(t2);
       window.clearTimeout(t3);
+      for (const id of collapse) window.clearTimeout(id);
     };
   }, [open, logVersion]);
 
-  /** FAB only: stay above iframe content. Open panel is in-flow so scrollHeight grows. */
-  const zMax = { zIndex: 2147483647 } as const;
-
   if (!open) {
-    /* Portal to body + max z-index: avoids overflow/stacking issues inside #origin-root. */
-    return createPortal(
-      <div
-        className="pointer-events-none fixed bottom-3 left-3 flex flex-col items-start gap-1"
-        style={zMax}
-      >
-        <button
-          type="button"
-          className="pointer-events-auto rounded-lg border-2 border-amber-400 bg-stone-950 px-3 py-2 text-left text-[11px] font-semibold text-amber-100 shadow-xl ring-2 ring-amber-500/30 hover:bg-stone-900 dark:border-amber-500/80 dark:bg-slate-950 dark:text-amber-100"
-          onClick={toggle}
-          title="Open Origin debug panel (or press Ctrl+Alt+D while this widget is focused)"
-        >
-          Origin debug
-          <span className="mt-0.5 block font-normal text-[9px] text-amber-200/90">
-            Click or Ctrl+Alt+D (focus iframe first)
-          </span>
-        </button>
-      </div>,
-      document.body,
-    );
+    return null;
   }
 
   /* In document flow (not fixed) so body scrollHeight grows and the host iframe height increases. */
@@ -204,7 +192,9 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
       aria-label="Origin debug"
     >
       <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-stone-700/80 px-3 py-2 font-mono text-[11px] text-emerald-300/95">
-        <span className="font-semibold">Origin debug</span>
+        <span className="font-semibold" title="Toggle with Ctrl+Alt+D (focus this widget first)">
+          Origin debug
+        </span>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -233,7 +223,7 @@ export function OriginDebugPanel(props: { widgetLoad: WidgetLoadSummary }) {
           <button
             type="button"
             className={`${btnClass} border-amber-700/80 text-amber-100`}
-            title="Close debug panel"
+            title="Close debug panel (or Ctrl+Alt+D)"
             onClick={toggle}
           >
             Close
